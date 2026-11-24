@@ -28,7 +28,8 @@ python3 ui/server.py
 Open http://127.0.0.1:8000, flip **Authorization check**, press **Run demo**. Each run
 executes the real `demo.py` and shows the request path (user → tool credential → backend)
 with the outcome stamped. Also dependency-free: standard library only. Without the
-server the page falls back to replaying the committed transcript.
+server the page falls back to replaying the committed transcript. Recorded click-through:
+`assets/ui-demo.mp4`.
 
 Other cases in the same lab: `kill_switch.py` (shared credential vs per-agent identity),
 `revoke_after_queue.py` (time-of-check vs time-of-use).
