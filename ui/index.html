@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Episode 1 — read-only user writes through a shared service account</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0e141c; --line: #223041;
+    --text: #e6edf3; --muted: #8b9bb0; --accent: #4cc2ff; --good: #3fb950; --bad: #f85149;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 28px;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .2px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .switch input { display: none; }
+  .track { width: 46px; height: 26px; border-radius: 999px; background: #2a3644; position: relative; transition: background .15s; }
+  .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: #d7e2ee; transition: transform .15s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(20px); }
+  .label { color: var(--muted); }
+  button {
+    background: var(--accent); color: #04121c; border: 0; border-radius: 8px;
+    padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .flow { display: grid; grid-template-columns: 1fr 44px 1fr 44px 1fr; align-items: stretch; gap: 0; margin: 6px 0 18px; }
+  .node { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .node.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .node h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 8px; }
+  .node .who { font-family: var(--mono); font-size: 14px; }
+  .badge { display: inline-block; font-family: var(--mono); font-size: 12px; border-radius: 6px; padding: 2px 8px; margin-top: 8px; background: #1b2733; color: var(--accent); border: 1px solid #26405a; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 22px; }
+  .arrow.active { color: var(--accent); }
+  #stamp { font-family: var(--mono); font-weight: 700; margin-top: 10px; min-height: 22px; }
+  #stamp.created { color: var(--good); }
+  #stamp.denied { color: var(--bad); }
+  pre {
+    background: #070b10; border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+    font-family: var(--mono); font-size: 13px; white-space: pre-wrap; margin: 0; min-height: 120px;
+  }
+  #takeaway { margin-top: 14px; color: var(--muted); }
+  footer { margin-top: 16px; color: var(--muted); font-size: 13px; }
+  code { font-family: var(--mono); }
+</style>
+</head>
+<body>
+<main>
+  <h1>A read-only user just wrote to the backend.</h1>
+  <p class="sub">Episode 1 · shared service account · runs the real <code>demo.py</code></p>
+
+  <section class="panel">
+    <div class="controls">
+      <label class="switch">
+        <input type="checkbox" id="authz">
+        <span class="track"></span>
+        <span class="label">Authorization check on the user's own permission</span>
+      </label>
+      <button id="run" type="button">Run demo</button>
+    </div>
+
+    <div class="flow">
+      <div class="node" id="n-user">
+        <h2>End user</h2>
+        <div class="who">alice · role=reader</div>
+        <div class="badge">read-only</div>
+      </div>
+      <div class="arrow" id="a1">→</div>
+      <div class="node" id="n-tool">
+        <h2>Agent tool</h2>
+        <div class="who">calls backend with</div>
+        <div class="badge">svc-agent-tools · can_write=True</div>
+      </div>
+      <div class="arrow" id="a2">→</div>
+      <div class="node" id="n-backend">
+        <h2>Backend</h2>
+        <div class="who">trusts the calling credential only</div>
+        <div id="stamp"></div>
+      </div>
+    </div>
+
+    <pre id="output"></pre>
+    <p id="takeaway"></p>
+    <footer id="mode"></footer>
+  </section>
+</main>
+
+<script>
+const REPLAY = {
+  before: "=== read-only user + shared write-capable tool cred (authZ check OFF) ===\n\n1. End user: alice role=reader\n2. Tool credential backend will accept: svc-agent-tools can_write=True\n3. Authorization check on the user's own permission: none\n\n4. WRITE SUCCEEDED -> T-101\n   Credential the backend accepted: svc-agent-tools (not alice)\n   Why allowed: backend only saw the shared write-capable tool identity.\n",
+  after: "=== read-only user + shared write-capable tool cred (authZ check ON) ===\n\n1. End user: alice role=reader\n2. Tool credential backend will accept: svc-agent-tools can_write=True\n3. Authorization check on the user's own permission: user must be admin\n\n4. WRITE FAILED -> authZ check: user alice is reader, write denied\n   Same user, same tool, same shared cred. The check changed the outcome.\n"
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function reset() {
+  document.querySelectorAll(".node, .arrow").forEach((el) => el.classList.remove("active"));
+  const stamp = document.getElementById("stamp");
+  stamp.textContent = "";
+  stamp.className = "";
+  document.getElementById("takeaway").textContent = "";
+}
+
+async function animate() {
+  const steps = [["#n-user", null], ["#a1", null], ["#n-tool", null], ["#a2", null], ["#n-backend", null]];
+  for (const [sel] of steps) {
+    document.querySelector(sel).classList.add("active");
+    await sleep(420);
+  }
+}
+
+async function runDemo() {
+  const authz = document.getElementById("authz").checked;
+  const btn = document.getElementById("run");
+  btn.disabled = true;
+  reset();
+
+  const anim = animate();
+  let data, live = true;
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authz }),
+    });
+    if (!res.ok) throw new Error("server said " + res.status);
+    data = await res.json();
+  } catch (err) {
+    live = false;
+    const out = authz ? REPLAY.after : REPLAY.before;
+    data = {
+      output: out,
+      verdict: authz ? "denied" : "created",
+      ticket: authz ? null : "T-101",
+    };
+  }
+  await anim;
+
+  const stamp = document.getElementById("stamp");
+  if (data.verdict === "created") {
+    stamp.textContent = (data.ticket || "CREATED") + " · CREATED";
+    stamp.className = "created";
+  } else if (data.verdict === "denied") {
+    stamp.textContent = "DENIED";
+    stamp.className = "denied";
+  } else {
+    stamp.textContent = "ERROR";
+    stamp.className = "denied";
+  }
+  document.getElementById("output").textContent = data.output;
+  document.getElementById("takeaway").textContent =
+    "Takeaway: trace each action to the identity the backend actually accepted.";
+  document.getElementById("mode").textContent = live
+    ? "Live run of demo.py · " + new URL(window.location.href).host
+    : "Replay from the committed transcript (open this page through ui/server.py to run the real demo).";
+  btn.disabled = false;
+}
+
+document.getElementById("run").addEventListener("click", runDemo);
+</script>
+</body>
+</html>

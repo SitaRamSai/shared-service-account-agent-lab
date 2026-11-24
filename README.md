@@ -19,6 +19,17 @@ python3 demo.py
 No dependencies beyond Python 3.8+. All identities are fake placeholders; there is no
 backend, no network and no real credential.
 
+## Run the UI
+
+```bash
+python3 ui/server.py
+```
+
+Open http://127.0.0.1:8000, flip **Authorization check**, press **Run demo**. Each run
+executes the real `demo.py` and shows the request path (user → tool credential → backend)
+with the outcome stamped. Also dependency-free: standard library only. Without the
+server the page falls back to replaying the committed transcript.
+
 Other cases in the same lab: `kill_switch.py` (shared credential vs per-agent identity),
 `revoke_after_queue.py` (time-of-check vs time-of-use).
 

@@ -60,6 +60,33 @@ class AgentTool:
         return self.backend.create_ticket(self.cred, title)
 
 
+def scenario(authz_check: bool) -> None:
+    """One run of the case. `authz_check=False` is the vulnerable configuration."""
+    user = User(name="alice", role="reader")  # read-only end user
+    backend = TicketBackend()
+    tool = AgentTool(backend, SHARED_TOOL_CRED)
+
+    tool.require_user_write = authz_check
+    state = "ON" if authz_check else "OFF"
+    print(f"=== read-only user + shared write-capable tool cred (authZ check {state}) ===\n")
+    print(f"1. End user: {user.name} role={user.role}")
+    print(f"2. Tool credential backend will accept: {tool.cred.name} can_write={tool.cred.can_write}")
+    print(
+        "3. Authorization check on the user's own permission: "
+        + ("user must be admin" if authz_check else "none")
+    )
+    print()
+    try:
+        ticket_id = tool.open_ticket(user, "delete all invoices")
+        print(f"4. WRITE SUCCEEDED -> {ticket_id}")
+        print(f"   Credential the backend accepted: {tool.cred.name} (not {user.name})")
+        print("   Why allowed: backend only saw the shared write-capable tool identity.")
+    except PermissionError as exc:
+        print(f"4. WRITE FAILED -> {exc}")
+        print("   Same user, same tool, same shared cred. The check changed the outcome.")
+    print()
+
+
 def run() -> None:
     user = User(name="alice", role="reader")  # read-only end user
     backend = TicketBackend()
@@ -95,4 +122,20 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Shared service account case (episode 1).")
+    parser.add_argument(
+        "--mode",
+        choices=("full", "before", "after"),
+        default="full",
+        help="full = before/after narrative (default); before/after = one configuration",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "before":
+        scenario(authz_check=False)
+    elif args.mode == "after":
+        scenario(authz_check=True)
+    else:
+        run()
