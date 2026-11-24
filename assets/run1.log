@@ -1,0 +1,16 @@
+=== §19 case: read-only user + write-capable shared tool cred ===
+
+1. End user: alice role=reader
+2. Tool credential backend will accept: svc-agent-tools can_write=True
+
+3. BEFORE authZ check: write SUCCEEDED -> T-101
+   Credential the backend accepted: svc-agent-tools (not alice)
+   Why allowed: backend only saw the shared write-capable tool identity.
+
+4. Added missing check: tool requires user.role == admin before calling backend
+
+5. AFTER authZ check: write FAILED -> authZ check: user alice is reader, write denied
+   Same user, same tool, same shared cred. The check changed the outcome.
+
+Takeaway: follow one action to the identity the backend accepted.
+Reporting 'user is read-only' without that trace is false assurance.
