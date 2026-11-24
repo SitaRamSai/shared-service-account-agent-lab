@@ -1,0 +1,8 @@
+{"version": 2, "width": 80, "height": 24, "timestamp": 1795494399, "env": {"SHELL": "/bin/zsh", "TERM": null}}
+[0.008045, "o", "\u001b[3J\u001b[H\u001b[2J"]
+[0.008501, "o", "A read-only user just wrote to the backend.\r\n"]
+[1.07088, "o", "The agent tool called it with one shared service account. Watch what the backend accepts.\r\n"]
+[3.101394, "o", "$ python3 demo.py\r\n"]
+[4.188393, "o", "=== §19 case: read-only user + write-capable shared tool cred ===\r\n\r\n1. End user: alice role=reader\r\n2. Tool credential backend will accept: svc-agent-tools can_write=True\r\n\r\n3. BEFORE authZ check: write SUCCEEDED -> T-101\r\n   Credential the backend accepted: svc-agent-tools (not alice)\r\n   Why allowed: backend only saw the shared write-capable tool identity.\r\n\r\n4. Added missing check: tool requires user.role == admin before calling backend\r\n\r\n"]
+[4.188424, "o", "5. AFTER authZ check: write FAILED -> authZ check: user alice is reader, write denied\r\n   Same user, same tool, same shared cred. The check changed the outcome.\r\n\r\nTakeaway: follow one action to the identity the backend accepted.\r\nReporting 'user is read-only' without that trace is false assurance.\r\n"]
+[6.2674, "o", "\r\nTakeaway: trace each action to the identity the backend actually accepted.\r\n"]
